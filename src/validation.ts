@@ -1,14 +1,24 @@
 import { exec } from "node:child_process";
 import type { ValidationResult } from "./types.js";
 
+const TIMEOUT_MS = 10 * 60 * 1000;
+
 export function runValidation(command: string, cwd: string): Promise<ValidationResult> {
-  return new Promise((resolve, reject) => {
-    exec(command, { cwd }, (error, stdout, stderr) => {
+  return new Promise((resolve) => {
+    exec(command, { cwd, timeout: TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => {
+      const output = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n");
       if (error) {
-        reject(error);
+        const reason = error.killed
+          ? `terminated: timed out after ${TIMEOUT_MS} ms or was killed`
+          : `exit code ${error.code ?? "unknown"}`;
+        resolve({
+          command,
+          status: "failed",
+          output: output ? `${output}\n[${reason}]` : `[${reason}]`,
+        });
         return;
       }
-      resolve({ command, status: "passed", output: stdout || stderr });
+      resolve({ command, status: "passed", output });
     });
   });
 }
